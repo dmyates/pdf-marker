@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-marker"
+version = "0.1.0"
+description = "A small native Linux PDF form filling and marking app"
+requires-python = ">=3.10"
+license = "AGPL-3.0-or-later"
+dependencies = ["PyMuPDF>=1.26,<2", "pypdf>=6,<7"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+pdf-marker = "pdfmarker.app:main"
+
+[tool.setuptools.packages.find]
+include = ["pdfmarker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
