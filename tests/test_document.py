@@ -1,4 +1,3 @@
-from datetime import datetime
 from io import BytesIO
 
 import pymupdf as pdf
@@ -10,7 +9,7 @@ import pytest
 from pdfmarker.document import Document, Mark, PasswordRequired
 
 
-def test_export_all_tools_and_interactive_fields(sample):
+def test_save_all_tools_and_interactive_fields(sample):
     original = sample.read_bytes()
     doc = Document(sample)
     fields = {f.name: f for f in doc.fields}
@@ -22,8 +21,8 @@ def test_export_all_tools_and_interactive_fields(sample):
     doc.add(Mark("draw", 1, (80, 300, 200, 350), points=((80, 350), (120, 300), (160, 345), (200, 315))))
     doc.add(Mark("tick", 0, (350, 140, 368, 158)))
     doc.add(Mark("cross", 1, (350, 140, 368, 158)))
-    output = doc.export(now=datetime(2026, 10, 25, 14, 30, 22))
-    assert output.name == "application-signed-20261025-143022.PDF"
+    output = doc.save(sample.with_name("filled.pdf"))
+    assert output == sample.with_name("filled.pdf").resolve() and doc.path == output
     assert sample.read_bytes() == original
     assert not doc.dirty
     reader = PdfReader(output)
@@ -45,7 +44,27 @@ def test_export_all_tools_and_interactive_fields(sample):
     assert doc.dirty
     doc.redo()
     assert not doc.dirty
-    assert doc.export(now=datetime(2026, 10, 25, 14, 30, 22)).name.endswith("-1.PDF")
+
+
+def test_save_replaces_atomically_and_keeps_permissions(sample, tmp_path):
+    doc = Document(sample)
+    doc.add(Mark("tick", 0, (350, 140, 368, 158)))
+    target = tmp_path / "existing.pdf"
+    target.write_bytes(b"old")
+    target.chmod(0o640)
+    doc.save(target)
+    assert target.read_bytes().startswith(b"%PDF") and (target.stat().st_mode & 0o777) == 0o640
+    assert [p.name for p in tmp_path.iterdir() if p.name.endswith(".part")] == []
+    # Saving over the original keeps the session's editable marks over the source.
+    doc.save(sample)
+    doc.add(Mark("cross", 0, (300, 140, 318, 158)))
+    doc.save(sample)
+    with pdf.open(sample) as saved:
+        assert len(saved[0].get_drawings()) == 2
+    link = tmp_path / "link.pdf"
+    link.symlink_to(target)
+    doc.save(link)
+    assert link.is_symlink() and doc.path == target.resolve()
 
 
 def test_history_preserves_fields_and_marks(sample):

@@ -4,7 +4,7 @@ try:
     gi.require_version('Gtk', '4.0')
     gi.require_version('PangoCairo', '1.0')
     gi.require_foreign('cairo')
-    from gi.repository import Gtk, Gdk, Gio, GLib, Gsk, Graphene, Pango, PangoCairo
+    from gi.repository import Gtk, Gdk, Gio, GLib, GObject, Gsk, Graphene, Pango, PangoCairo
     import cairo
     if (Gtk.get_major_version(), Gtk.get_minor_version()) < (4, 10):
         raise RuntimeError('GTK 4.10 or newer is required')
