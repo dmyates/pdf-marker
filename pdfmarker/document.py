@@ -5,6 +5,7 @@ Forms remain interactive; overlays become ordinary vector/text PDF content.
 """
 from __future__ import annotations
 
+from contextlib import suppress
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -14,7 +15,9 @@ from pathlib import Path
 
 import pymupdf as pdf
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import NameObject
+from pypdf.generic import NameObject, TextStringObject
+
+from . import scripts
 
 
 @dataclass(frozen=True)
@@ -47,10 +50,24 @@ class Field:
     on_value: str | bool | None
     flags: int
     max_length: int
+    format: str = ""
+    keystroke: str = ""
+    validate: str = ""
+    calculate: str = ""
 
 
 class PasswordRequired(ValueError):
     pass
+
+
+def _qualified_name(obj) -> str:
+    parts = []
+    while obj is not None:
+        if "/T" in obj:
+            parts.append(str(obj["/T"]))
+        parent = obj.get("/Parent")
+        obj = parent.get_object() if parent is not None else None
+    return ".".join(reversed(parts))
 
 
 class Document:
@@ -64,6 +81,7 @@ class Document:
             self._source = source.tobytes(encryption=pdf.PDF_ENCRYPT_NONE)
         reader = PdfReader(BytesIO(self._source))
         form = reader.trailer["/Root"].get("/AcroForm")
+        form = form.get_object() if form is not None else None
         if form and "/XFA" in form.get_object():
             raise ValueError("XFA forms are not supported. Use an AcroForm or a flat PDF.")
         self.pages: list[tuple[float, float]] = []
@@ -78,7 +96,10 @@ class Document:
                         tuple((str(v[0]), str(v[1])) if isinstance(v, (list, tuple))
                               else (str(v), str(v)) for v in widget.choice_values or ()), widget.on_state(),
                         widget.field_flags, widget.text_maxlen or 0,
+                        widget.script_format or "", widget.script_stroke or "",
+                        widget.script_change or "", widget.script_calc or "",
                     ))
+        self.calculation_order = self._calculation_order(form)
         self.marks: list[Mark] = []
         self.values: dict[str, object] = {}
         self._undo: list[tuple] = []
@@ -86,6 +107,16 @@ class Document:
         self._saved = self._state()
         self._cached: bytes | None = self._source
         self._form_cache = ({}, self._source)
+
+    def _calculation_order(self, form) -> list[str]:
+        names = []
+        for ref in (form or {}).get("/CO", ()) or ():
+            with suppress(Exception):
+                names.append(_qualified_name(ref.get_object()))
+        calculated = [f.name for f in self.fields if f.calculate]
+        names = [n for n in names if n in calculated]
+        names += [n for n in dict.fromkeys(calculated) if n not in names]
+        return names
 
     def _state(self):
         return deepcopy((self.marks, self.values))
@@ -153,22 +184,59 @@ class Document:
         self._change()
         self.marks = [mark for i, mark in enumerate(self.marks) if i not in indices]
 
+    # Form fields and their Acrobat built-in scripts.
+
+    def value_of(self, field: Field, values=None):
+        values = self.values if values is None else values
+        return values.get(field.name, field.value)
+
+    def _values_of(self, values):
+        by_name = {}
+        for field in self.fields:
+            by_name.setdefault(field.name, field)
+
+        def lookup(name):
+            return ["" if (v := self.value_of(f, values)) in (None, False) else str(v)
+                    for n, f in by_name.items() if n == name or n.startswith(name + ".")]
+        return lookup
+
+    def _recalculate(self, values):
+        by_name = {f.name: f for f in self.fields}
+        for name in self.calculation_order:
+            field = by_name[name]
+            result = scripts.calculate(field.calculate, self._values_of(values))
+            if result is not None and result != str(self.value_of(field, values) or ""):
+                values[name] = result
+        return values
+
+    def display_value(self, field: Field, value=None) -> str:
+        value = self.value_of(field) if value is None else value
+        text = "" if value is None else str(value)
+        if field.format and field.kind in (pdf.PDF_WIDGET_TYPE_TEXT, pdf.PDF_WIDGET_TYPE_COMBOBOX):
+            formatted = scripts.format_display(field.format, text)
+            if formatted is not None:
+                return formatted
+        return text
+
     def fill(self, field: Field, value: object):
         if field.flags & 1:
             raise ValueError("This field is read-only.")
-        if value == self.values.get(field.name, field.value):
+        if isinstance(value, str) and field.kind in (pdf.PDF_WIDGET_TYPE_TEXT, pdf.PDF_WIDGET_TYPE_COMBOBOX):
+            value = scripts.commit_value(field.label, field.keystroke, field.validate, value)
+        if value == self.value_of(field):
             return
+        values = self._recalculate({**self.values, field.name: value})
         # Build a candidate first. A malformed form must not poison the current
         # document or discard a previous undo entry when its update fails.
         old_values, old_cached = self.values, self._cached
-        self.values = {**self.values, field.name: value}
+        self.values = values
         self._cached = None
         try:
             candidate = self.pdf_bytes()
         finally:
             self.values, self._cached = old_values, old_cached
         self._change()
-        self.values[field.name] = value
+        self.values = values
         self._cached = candidate
 
     def undo(self):
@@ -227,13 +295,25 @@ class Document:
             missing = self.values.keys() - known.keys()
             if missing:
                 raise ValueError("This PDF has malformed form fields: " + ", ".join(sorted(missing)))
-            types = {f.name: f.kind for f in self.fields}
-            values = {}
+            fields = {f.name: f for f in self.fields}
+            values, raw = {}, {}
             for name, value in self.values.items():
-                if types[name] in (pdf.PDF_WIDGET_TYPE_CHECKBOX, pdf.PDF_WIDGET_TYPE_RADIOBUTTON):
+                field = fields[name]
+                if field.kind in (pdf.PDF_WIDGET_TYPE_CHECKBOX, pdf.PDF_WIDGET_TYPE_RADIOBUTTON):
                     value = NameObject("/" + str(value).lstrip("/"))
+                elif isinstance(value, str) and (shown := self.display_value(field, value)) != value:
+                    raw[name] = value
+                    value = shown
                 values[name] = value
             writer.update_page_form_field_values(None, values, auto_regenerate=False)
+            # Formatted appearances keep the typed value, as Acrobat does.
+            for page in writer.pages:
+                for ref in page.get("/Annots", ()) or ():
+                    widget = ref.get_object()
+                    name = _qualified_name(widget)
+                    if widget.get("/Subtype") == "/Widget" and name in raw:
+                        target = widget if "/T" in widget else widget["/Parent"].get_object()
+                        target[NameObject("/V")] = TextStringObject(raw[name])
             buf = BytesIO()
             writer.write(buf)
             content = buf.getvalue()
