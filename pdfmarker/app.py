@@ -857,7 +857,7 @@ class Window(Gtk.ApplicationWindow):
         if not self.document or not self.canvas.finish_edit():
             return
         dialog = Gtk.FileDialog(title='Save PDF',filters=self.pdf_filters(),
-                                initial_file=Gio.File.new_for_path(str(self.document.path)))
+                                initial_file=Gio.File.new_for_path(str(self.document.suggested_path)))
         def done(d,result):
             try:
                 file = d.save_finish(result)

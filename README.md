@@ -155,13 +155,22 @@ can invalidate its existing cryptographic signature.
 
 AcroForms are fully supported. Forms that also carry XFA data open normally;
 saving filled values removes the stale XFA copy so that every viewer shows the
-same values. Dynamic XFA forms, which only Adobe software can lay out, open with
-a notice and show their fallback pages. Read-only fields stay read-only.
+same values. Read-only fields stay read-only.
 Encrypted PDFs prompt for their password; saved files are unencrypted.
 
 Rendering and saving run on the UI thread, between frames. An unusually complex
 page can still briefly pause the interface. Printing renders pages at up to
 300 dpi.
+
+## Dynamic XFA forms
+
+Some forms, including those from SARS and many other government agencies, are dynamic XFA forms. Their only real page is a placeholder,[^xfa] and the form itself is an XML template plus data that Adobe Reader lays out when the file opens. That's why reading them on Linux has usually meant finding a copy of Acrobat.
+
+PDF Marker lays these forms out itself, which takes a moment when the file opens. It places the form's sections, fields, text, borders, boxed (comb) fields, check boxes and images, fills them with the form's data, repeats sections once for each entry in the data and divides the result into pages using the form's own page templates and page breaks. Read-only values become ordinary page text, so you can select, copy and print them. Editable fields become standard form fields that you fill in as usual. Values in boxed fields are drawn one character per box, so they're copied and searched with a space between each character.
+
+The form's scripts are never run, so anything it works out with JavaScript or FormCalc, such as page numbers, totals, barcodes or the wording for a code, stays blank. PDF Marker handles two common jobs of these scripts without running them: a hidden section that contains data is shown, and a value kept in a hidden field is shown in the visible field drawn at the same place. Where a script would turn a code into words, like an account type of 2 into "Savings", you'll see the code. Fonts that the form names but your system doesn't have are replaced with similar ones, so text can wrap slightly differently than in Adobe Reader.
+
+Saving creates a standard PDF without the XFA form, which any PDF app can open. So that you don't replace the original by accident, the first save suggests a new file name. If a form can't be laid out, it opens with a notice and shows its placeholder page.
 
 ## Development
 
@@ -177,7 +186,7 @@ on a Wayland desktop, and they keep recent files and settings in a temporary
 directory.
 
 The suite checks canonical form values and widget appearances after saving,
-form scripts, multiple pages, text and drawing output, rotation/cropping,
+form scripts, dynamic XFA layout, multiple pages, text and drawing output, rotation/cropping,
 passwords, atomic saving, history, inline editing, resizing, group moves and
 deletion, text selection, links, search, annotations, highlights, view rotation
 and spreads, presentation mode, the toolbar drawer, remembered positions,
@@ -186,3 +195,5 @@ agreement.
 
 See [prior-art.md](docs/prior-art.md) for the research that informed this app.
 This project is licensed under AGPL-3.0-or-later; see [LICENSE](LICENSE).
+
+[^xfa]: The placeholder page is often just a message saying "Please wait..." and suggesting you upgrade to the latest version of Adobe Reader. Waiting does not help.

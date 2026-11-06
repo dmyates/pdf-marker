@@ -20,7 +20,7 @@ import pymupdf as pdf
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject, TextStringObject
 
-from . import scripts
+from . import scripts, xfa
 from .pagetext import PageText
 
 MARK_KINDS = {"text", "draw", "tick", "cross", "highlight"}
@@ -173,10 +173,19 @@ class Document:
             self.encryption = source.metadata.get("encryption") or ""
             self._source = source.tobytes(encryption=pdf.PDF_ENCRYPT_NONE)
         reader = PdfReader(BytesIO(self._source))
-        root = reader.trailer["/Root"]
-        form = root.get("/AcroForm")
+        form = reader.trailer["/Root"].get("/AcroForm")
         form = form.get_object() if form is not None else None
         self.xfa = bool(form and "/XFA" in form)
+        # Dynamic XFA forms only have a placeholder page, so lay out the real
+        # form and work on that instead. If that fails, show the placeholder.
+        self.xfa_layout = False
+        if self.xfa and xfa.is_dynamic(reader):
+            with suppress(Exception):
+                self._source = xfa.convert(self._source)
+                self.xfa_layout = True
+                reader = PdfReader(BytesIO(self._source))
+                form = reader.trailer["/Root"].get("/AcroForm")
+                form = form.get_object() if form is not None else None
         self._doc = pdf.open(stream=self._source, filetype="pdf")
         self.pages: list[tuple[float, float]] = []
         self.fields: list[Field] = []
@@ -203,9 +212,12 @@ class Document:
                     info.get("title", ""), info.get("content", ""),
                     pdf_date(info.get("modDate") or info.get("creationDate") or "")))
         self.notice = ""
-        if self.xfa and not self.fields:
-            self.notice = ("This is a dynamic XFA form. Only Adobe Acrobat or Reader can show its "
-                           "interactive content; this app shows the PDF's fallback pages.")
+        if self.xfa_layout:
+            self.notice = ("PDF Marker laid out this XFA form itself, without running its scripts, so it may "
+                           "differ slightly from Adobe Reader. Saving creates a standard PDF.")
+        elif self.xfa and not self.fields:
+            self.notice = ("This is a dynamic XFA form that PDF Marker could not lay out, "
+                           "so it shows the PDF's placeholder page.")
         self.calculation_order = self._calculation_order(form)
         self.marks: list[Mark] = []
         self.values: dict[str, object] = {}
@@ -484,7 +496,7 @@ class Document:
                     if widget.get("/Subtype") == "/Widget" and name in raw:
                         target = widget if "/T" in widget else widget["/Parent"].get_object()
                         target[NameObject("/V")] = TextStringObject(raw[name])
-            if self.xfa:
+            if self.xfa and "/AcroForm" in writer.root_object:
                 # Filled AcroForm values must win over stale XFA data in other viewers.
                 form = writer.root_object["/AcroForm"].get_object()
                 form.pop(NameObject("/XFA"), None)
@@ -624,9 +636,24 @@ class Document:
             ("Application", meta.get("creator", "")), ("PDF producer", meta.get("producer", "")),
             ("PDF version", meta.get("format", "").replace("PDF ", "")),
             ("Encryption", self.encryption or "None"),
-            ("Form", ("XFA form" if self.xfa else "Interactive form") + f" with {len({f.name for f in self.fields})} fields" if self.fields or self.xfa else "None"),
+            ("Form", self._form_description()),
         ]
         return [(k, v) for k, v in rows if v]
+
+    def _form_description(self) -> str:
+        fields = f" with {len({f.name for f in self.fields})} fields"
+        if self.xfa_layout:
+            return "Dynamic XFA form, laid out by PDF Marker" + (fields if self.fields else "")
+        if self.xfa:
+            return "XFA form" + fields
+        return "Interactive form" + fields if self.fields else "None"
+
+    @property
+    def suggested_path(self) -> Path:
+        """Where to offer to save. A laid-out XFA form should not replace its original."""
+        if self.xfa_layout and not self.saved_path:
+            return self.path.with_name(f"{self.path.stem} (standard PDF).pdf")
+        return self.path
 
     def save(self, path: str | Path) -> Path:
         """Write atomically, replacing an existing file only once the new one is complete."""
