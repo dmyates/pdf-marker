@@ -3,6 +3,8 @@
 A small native Linux app for reading, filling, and marking PDFs. Built with GTK4,
 PyGObject, Pycairo, PyMuPDF, and pypdf. Documents are processed locally.
 
+![PDF Marker with an added text box selected for resizing, a hand-drawn circle and arrow, and a handwritten signature on a sample document.](docs/screenshots/text-boxes.png)
+
 ## Run
 
 Requires Python 3.10+, GTK ≥4.10, PyGObject, Pycairo, the GI Cairo bridge,
@@ -107,6 +109,24 @@ visible page images are kept in memory.
 The settings button appears for tools or selections with adjustable size,
 stroke, or color. Click **Menu → Help** or press **?** with the canvas focused
 for controls.
+
+### Text boxes and freehand drawings
+
+The screenshot above shows a text box added to a document without form fields.
+The selected box has a resize handle; the circle, arrow, and signature are
+freehand marks drawn directly on the page.
+
+With **Draw** selected, add signatures, circle details, or sketch wherever you
+need to. Each stroke can be undone, moved, or deleted.
+
+![PDF Marker with Draw selected, showing a freehand circle, an arrow pointing to an added text box, and a handwritten signature.](docs/screenshots/drawing.png)
+
+### Forms and highlights
+
+Use **Fill fields** to identify interactive fields, and **Highlight** to mark
+existing text. This sample shows filled fields and a highlighted reminder.
+
+![PDF Marker showing three filled form fields outlined in blue and a reminder highlighted in yellow.](docs/screenshots/forms-and-highlights.png)
 
 ## Save and print
 
