@@ -1048,7 +1048,8 @@ class Window(Gtk.ApplicationWindow):
         def close():
             self.remember_position()
             self._closing = True
-            self.close()
+            # GTK ignores recursive close requests while this handler is running.
+            GLib.idle_add(self.close)
         self.confirm_discard(close)
         return True
 

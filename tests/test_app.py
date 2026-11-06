@@ -282,6 +282,55 @@ def test_pending_close_can_cancel_and_replacement_can_discard(window,sample):
     assert w.document is not old
 
 
+@pytest.mark.parametrize('saved',[False,True])
+@pytest.mark.parametrize('shortcut',[False,True])
+def test_clean_window_closes_on_first_request(window,saved,shortcut):
+    w=window
+    if saved:
+        w.document.add(Mark('tick',0,(300,300,320,320)))
+        save(w)
+    application=w.get_application()
+    if shortcut:
+        w.actions['close'].activate(None)
+    else:
+        w.close()
+    pump()
+    assert not w.get_visible()
+    assert w not in application.get_windows()
+    from pdfmarker import state
+    assert state.position(w.document.path) is not None
+
+
+@pytest.mark.parametrize('response',[Gtk.ResponseType.REJECT,Gtk.ResponseType.ACCEPT])
+def test_close_request_can_cancel_then_discard_or_save(window,tmp_path,response):
+    w=window
+    application=w.get_application()
+    target=tmp_path/'closed.pdf'
+    w.document.saved_path=target
+    w.canvas.begin_text(Mark('text',0,(40,250,240,300)))
+    w.canvas.editor.get_buffer().set_text('Keep this edit')
+    w.close()
+    pump()
+    dialog=next(x for x in application.get_windows() if isinstance(x,Gtk.Dialog))
+    assert w.document.marks[0].text=='Keep this edit'
+    dialog.response(Gtk.ResponseType.CANCEL)
+    pump()
+    assert w.get_visible() and not w._closing
+    assert not target.exists()
+    w.close()
+    pump()
+    dialog=next(x for x in application.get_windows() if isinstance(x,Gtk.Dialog))
+    dialog.response(response)
+    pump()
+    assert not w.get_visible()
+    assert w not in application.get_windows()
+    if response==Gtk.ResponseType.ACCEPT:
+        with pdf.open(target) as saved:
+            assert 'Keep this edit' in saved[0].get_text()
+    else:
+        assert not target.exists()
+
+
 def test_form_dialogs_use_canonical_values(window):
     w=window
     field=next(f for f in w.document.fields if f.name=='choice')
@@ -305,8 +354,12 @@ def test_empty_window(app):
     assert not w.actions['save'].get_enabled()
     assert w.empty.get_visible()
     assert not w.save()
-    w._closing=True
+    w.present()
+    pump()
     w.close()
+    pump()
+    assert not w.get_visible()
+    assert w not in app.get_windows()
 
 
 class NativeInput:
