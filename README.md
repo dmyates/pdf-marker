@@ -1,14 +1,16 @@
 # PDF Marker
 
-A small native Linux app for reading, filling, and marking PDFs. Built with GTK4,
-PyGObject, Pycairo, PyMuPDF, and pypdf. Documents are processed locally.
+PDF Marker is a small native Linux app for reading PDFs and doing the things to them that usually involve a printer, a pen and a scanner (or a $5+/month SaaS subscription): filling in forms, ticking boxes, writing in the spaces without computerised form fields, and signing at the bottom.
+
+I wanted something that could do all of this in a native GTK window with simple, intuitive UX. Some other apps do it, but I wasn't satisfied with any of them – see [prior-art.md](docs/prior-art.md).
 
 ![PDF Marker with an added text box selected for resizing, a hand-drawn circle and arrow, and a handwritten signature on a sample document.](docs/screenshots/text-boxes.png)
 
-## Run
+*A text box on a document with no form fields, selected to show its resize handle. The circle, arrow and signature were drawn freehand.*
 
-Requires Python 3.10+, GTK ≥4.10, PyGObject, Pycairo, the GI Cairo bridge,
-`venv`, and a Linux graphical desktop (Wayland or X11).
+## Running it
+
+PDF Marker needs Python 3.10 or later, GTK 4.10 or later, PyGObject, Pycairo, the GI Cairo bridge, `venv` and a Linux desktop running Wayland or X11. Once those are in place, you can start it from this directory:
 
 ```sh
 ./run.sh
@@ -17,150 +19,104 @@ Requires Python 3.10+, GTK ≥4.10, PyGObject, Pycairo, the GI Cairo bridge,
 pdf-marker /path/to/form.pdf
 ```
 
-The launcher checks GTK before creating a local `.venv` with system site packages
-so it can use your distribution’s Python GTK/Cairo bindings. It installs the Python
-PDF dependencies with pip. It never installs system packages automatically.
+The launcher checks that GTK is available, then creates a local `.venv` with access to system site packages so that it can use your distribution's Python bindings for GTK and Cairo. It installs the Python PDF libraries with pip, but it will never install system packages – that part is up to you. On Debian and Ubuntu, install `python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-4.0 python3-venv` with your package manager (your release will need to ship GTK 4.10 or later). On Arch, install `gtk4 python-gobject python-cairo`. To see whether everything is in place without changing anything, run `./check-gtk.sh`.
 
-On Debian/Ubuntu, install `python3-gi python3-gi-cairo python3-cairo
-gir1.2-gtk-4.0 python3-venv` using your package manager; the distribution must
-provide GTK ≥4.10. On Arch, use `gtk4 python-gobject python-cairo`. The default
-interpreter is `/usr/bin/python3`; set `PDF_MARKER_PYTHON` to another system
-Python if needed. `./check-gtk.sh` checks availability without changing anything.
+The launcher uses `/usr/bin/python3` by default. If you'd rather it used a different system Python, set `PDF_MARKER_PYTHON`.
 
-For an application menu entry and an “Open With” PDF handler, which you can
-then choose as your default PDF viewer:
+To add PDF Marker to your application menu and to the "Open With" options for PDF files, run the installer:
 
 ```sh
 ./install.sh
 ```
 
-The installer uses `~/.local`; it does not require root or change your default
-PDF viewer. Keep this directory in place after installing. To uninstall the
-menu entry and command, remove `~/.local/bin/pdf-marker` and
-`~/.local/share/applications/pdf-marker.desktop`.
+This installs to `~/.local`, so it doesn't need root, and it won't make PDF Marker your default PDF viewer, though you can do that yourself afterwards. The installed command and menu entry both point back to this directory, so leave it where it is. To uninstall, delete `~/.local/bin/pdf-marker` and `~/.local/share/applications/pdf-marker.desktop`.
 
-## Read
+## Reading
 
-Open a PDF, pass its path on the command line, or drop it into the window. The
-start screen and **Menu → Open recent** list recent PDFs. Each file reopens at
-the page, zoom, rotation, and page layout you last used.
+You can open a PDF from within the app, by passing its path on the command line or by dropping it onto the window. Recent files are listed on the start screen and under **Menu → Open recent**, and each one reopens where you left it, at the same page, zoom, rotation and layout.
 
-- **Toolbar:** it slides down when the pointer reaches the top edge of the
-  document area, or when you click the small handle there or press F10. The pin
-  button keeps it open; that choice is remembered.
-- **Select (V)** is the default tool. Drag across text to select it, including
-  across pages; double-click selects a word, triple-click a line, and Ctrl+A
-  everything. Ctrl+C copies. Click a link, note, or form field to use it.
-- **Find (Ctrl+F)** highlights every match. Enter or F3 goes to the next match;
-  Shift+Enter or Shift+F3 to the previous one.
-- **Links:** links within the document jump to their target. Web and email links
-  open in your browser or mail app. Links to another local PDF open it. Links
-  that would run a program, a script, or any other kind of address are blocked.
-- **Sidebar (F9):** the document outline, embedded attachments (which you can
-  save), and the text of the current page. Screen readers can read the page
-  text view.
-- **View:** the bottom-right indicator holds the page list, zoom (fit width, fit
-  page, fixed levels), page layout (single pages, two pages, two pages with a
-  cover), rotation, full screen (F11), and presentation (F5). R and Shift+R
-  rotate the view; rotation never changes the file. In a presentation, click,
-  Space, or the arrow keys move between pages and Escape leaves.
-- **Comments:** click a sticky note, highlight, or other annotation to read
-  its text, edit it, or delete it.
-- **Document properties (Alt+Enter)** shows metadata, page size, PDF version,
-  encryption, and form type.
+The toolbar stays hidden until you need it. Move the pointer to the top edge of the document area, click the small handle there or press F10, and it will slide down. Click the pin button to keep it open, and PDF Marker will remember that you did.
 
-Scroll continuously with the mouse wheel, touchpad, scrollbar, arrow keys, or
-Space. Page Up/Page Down and Home/End jump between pages. Ctrl+wheel zooms
-around the pointer; middle-drag pans. Pages render in the background, and only
-visible page images are kept in memory.
+Scrolling is continuous, with the mouse wheel, touchpad, scrollbar, arrow keys or Space. Page Up, Page Down, Home and End jump between pages. Ctrl+wheel zooms around the pointer, and dragging with the middle mouse button pans. Pages are rendered in the background, and only images of the visible pages are kept in memory.
 
-## Fill and mark
+The indicator in the bottom-right corner holds the page list, zoom (fit width, fit page or a fixed level), page layout (single pages, two pages side by side, or two pages with the cover on its own), rotation, full screen (F11) and presentation mode (F5). R and Shift+R also rotate the view – this only changes how pages are displayed, never the file itself. In presentation mode, click or use Space or the arrow keys to move between pages, and press Escape to leave.
 
-1. **Fill fields:** click a field with Select, or use **Fill fields (F)** to
-   highlight only fields. Text, checkboxes, radio buttons, dropdowns, and list
-   boxes are supported. Repeated fields update together. Acrobat's standard
-   form scripts run natively: number, currency, percent, date, time, and special
-   formats; input checks and range validation; and calculated totals
-   (`AFSimple_Calculate` and simplified field notation). Custom JavaScript is
-   never executed.
-2. **Text box (T):** drag a rectangle or click to place a default box, then type
-   directly on the page. Click outside or press Ctrl+Enter to finish; Escape
-   cancels the current edit. Click existing text with the Text box tool, or
-   double-click it with Select, to edit it again. Text boxes start compact, grow vertically while typing, and fit their
-   text when you finish editing. Size and Ink also work on selected text. The editor and saved PDF
-   share the same vector text layout, including line wrapping and font metrics.
-3. **Draw (D):** draw a signature or any freehand mark directly on a page. Each
-   mouse-down to mouse-up stroke is one undoable mark.
-4. **Tick (K) / Cross (X):** click anywhere to place a mark. Size and Stroke control its
-   dimensions and line width. Ink controls the color of new marks.
-5. **Highlight (H):** drag across text. You can also right-click selected text
-   and choose **Highlight**. Highlights are saved as standard PDF highlight
-   annotations. The settings button changes their color.
-6. **Select (V)** moves marks: drag any added text box, drawing, tick, or cross. Drag a
-   selected text box's bottom-right handle to resize and reflow it. Delete,
-   **Delete selected**, or the right-click menu removes selected marks, highlights, or
-   the selected note. Ctrl-click
-   selects multiple marks for moving or deleting together. Marks can also be
-   dragged between pages. Ctrl+C copies selected marks; Ctrl+V pastes them onto
-   the current page with a small offset. Groups paste together as one undo step.
-   Text copy/paste works normally while editing text. Undo and redo apply to every edit; while typing,
-   they undo and redo within the text editor.
+Select (V) is the default tool. With it, you can drag across text to select it, even across pages, or double-click to select a word, triple-click for a line, or press Ctrl+A for everything. Ctrl+C copies. Clicking a link, note or form field with Select will use it.
 
-The settings button appears for tools or selections with adjustable size,
-stroke, or color. Click **Menu → Help** or press **?** with the canvas focused
-for controls.
+Ctrl+F searches the document and highlights every match. Enter or F3 moves to the next match, and Shift+Enter or Shift+F3 to the previous one.
 
-### Text boxes and freehand drawings
+Links within the document jump to their targets, web and email links open in your browser or mail app, and links to another local PDF open that PDF. Links that would run a program or script (yes, PDFs can do that) or point to any other kind of address are blocked.
 
-The screenshot above shows a text box added to a document without form fields.
-The selected box has a resize handle; the circle, arrow, and signature are
-freehand marks drawn directly on the page.
+F9 opens the sidebar, which shows the document outline, any embedded attachments (which you can save) and the text of the current page, in a view that screen readers can read.
 
-With **Draw** selected, add signatures, circle details, or sketch wherever you
-need to. Each stroke can be undone, moved, or deleted.
+Click a sticky note, highlight or other annotation to read its text, edit it or delete it. Alt+Enter shows the document's properties: metadata, page size, PDF version, encryption and form type.
+
+## Filling and marking
+
+<dl>
+<dt>Fill fields (F)</dt>
+<dd>
+
+Highlights only the form fields and lets you fill them in. Clicking a field with Select works too. Text fields, checkboxes, radio buttons, dropdowns and list boxes are all supported, and a field that appears more than once updates everywhere at once.
+
+Many forms made in Acrobat rely on its standard scripts to format and check what you type: numbers, currencies, percentages, dates, times and special formats like phone numbers, along with range validation and calculated totals. PDF Marker implements these natively, including `AFSimple_Calculate` and simplified field notation, rather than running them as JavaScript. For reasons of security and sanity, custom JavaScript is never executed.
+
+</dd>
+<dt>Text box (T)</dt>
+<dd>
+
+Type directly on the page, whether the document has form fields or not. Drag out a rectangle, or just click to place a default box. Text boxes start compact, grow downwards as you type and resize to fit their text when you're done. Click outside the box or press Ctrl+Enter to finish, or press Escape to cancel the current edit. To edit a text box again, click it with the Text box tool or double-click it with Select. Size and Ink also work on selected text. The editor and the saved PDF use the same vector text layout, with the same line wrapping and font metrics, so what you see while typing is what ends up in the file.
+
+</dd>
+<dt>Draw (D)</dt>
+<dd>
+
+For signatures and any other freehand marks, such as circling details, drawing arrows or sketching wherever you need to. Each stroke, from mouse-down to mouse-up, is a separate mark that can be undone, moved or deleted.
+
+</dd>
+<dt>Tick (K) and Cross (X)</dt>
+<dd>
+
+Place a mark wherever you click. Size and Stroke control its dimensions and line width, and Ink sets the colour of new marks.
+
+</dd>
+<dt>Highlight (H)</dt>
+<dd>
+
+Marks text that's already on the page. Drag across it, or right-click some selected text and choose **Highlight**. Highlights are saved as standard PDF highlight annotations, and you can change their colour with the settings button.
+
+</dd>
+<dt>Select (V)</dt>
+<dd>
+
+As well as selecting text, Select moves the marks you've added. You can drag any text box, drawing, tick or cross, including onto a different page, and Ctrl-click to select several marks and move or delete them together. Dragging the handle at the bottom-right of a selected text box resizes it and reflows its text. To remove selected marks or highlights, or the selected note, press Delete, choose **Delete selected** or use the right-click menu. Ctrl+C copies selected marks and Ctrl+V pastes them onto the current page with a small offset, and a pasted group counts as a single undo step. While you're editing text, copy and paste work on the text as usual.
+
+</dd>
+</dl>
 
 ![PDF Marker with Draw selected, showing a freehand circle, an arrow pointing to an added text box, and a handwritten signature.](docs/screenshots/drawing.png)
 
-### Forms and highlights
-
-Use **Fill fields** to identify interactive fields, and **Highlight** to mark
-existing text. This sample shows filled fields and a highlighted reminder.
-
 ![PDF Marker showing three filled form fields outlined in blue and a reminder highlighted in yellow.](docs/screenshots/forms-and-highlights.png)
 
-## Save and print
+Undo and redo work on every edit. While you're typing, they undo and redo within the text box.
 
-**Save (Ctrl+S)** asks where to save the first time, suggesting the current
-file. After that it saves to the same file without asking. **Save as
-(Ctrl+Shift+S)** always asks. Replacing a file asks for confirmation; the new
-file is written completely before it replaces the old one, keeping the old
-file's permissions. Closing with unsaved changes asks whether to save, discard,
-or cancel.
+The settings button appears whenever the current tool or selection has an adjustable size, stroke or colour. For a full list of controls, open **Menu → Help** or press ? with the canvas focused.
 
-**Print (Ctrl+P)** opens the system print dialog and includes filled fields,
-marks, and highlights. Landscape pages print in landscape orientation.
+## Saving and printing
 
-## PDF behavior and limits
+The first time you press Ctrl+S, PDF Marker asks where to save, suggesting the current file. After that, it saves to the same file without asking. Save as (Ctrl+Shift+S) always asks. Replacing an existing file requires confirmation, and the new file is written in full before it replaces the old one, keeping the old file's permissions, so a crash halfway through saving won't leave you with half a PDF. If you close the window with unsaved changes, you'll be asked whether to save, discard them or cancel.
 
-The opened file changes only if you save over it. Saving preserves page count, page rotation,
-crop boxes, and interactive form fields. Added text and drawings are vector PDF
-content, so recipients can see them without this app. Their handles and undo
-history are available during the current session; reopening a saved PDF
-does not recover editable overlay objects. Form fields, highlights, and notes
-remain editable in any PDF app.
+Print (Ctrl+P) opens the system print dialogue. Printouts include filled fields, marks and highlights, landscape pages print in landscape orientation, and pages are rendered at up to 300 dpi.
 
-“Signing” here means adding a visible handwritten signature. It does not create
-a certificate-based digital signature. Editing an already digitally signed PDF
-can invalidate its existing cryptographic signature.
+## What happens to your PDF
 
-AcroForms are fully supported. Forms that also carry XFA data open normally;
-saving filled values removes the stale XFA copy so that every viewer shows the
-same values. Read-only fields stay read-only.
-Encrypted PDFs prompt for their password; saved files are unencrypted.
+PDF Marker only changes the file you opened if you save over it. Saving preserves the page count, page rotation, crop boxes and interactive form fields. Text boxes and drawings are saved as ordinary vector PDF content, so recipients can see them without having this app installed. The catch is that they're only editable until you close the document: handles and undo history last for the current session, and reopening a saved PDF won't turn your marks back into editable objects. Form fields, highlights and notes remain editable in any PDF app.
 
-Rendering and saving run on the UI thread, between frames. An unusually complex
-page can still briefly pause the interface. Printing renders pages at up to
-300 dpi.
+Signing a document with PDF Marker just means drawing your signature on it. This application doesn't create certificate-based digital signatures. Editing a PDF that has already been digitally signed will, rightly, invalidate the existing signature.
+
+AcroForms are fully supported. Forms that also carry XFA data open normally, and when you save, PDF Marker removes the stale XFA copy of the values so that every viewer shows the same thing. Read-only fields stay read-only. Password-protected PDFs ask for their password when you open them, but they're saved without encryption.
+
+Rendering and saving both run on the UI thread, between frames, so an unusually complex page can make the interface pause briefly.
 
 ## Dynamic XFA forms
 
@@ -180,20 +136,12 @@ Saving creates a standard PDF without the XFA form, which any PDF app can open. 
 xvfb-run -a -s '-screen 0 1280x1000x24' .venv/bin/python -m pytest -q
 ```
 
-GTK tests need Xvfb; the native input regression also needs `libXtst`. When
-`DISPLAY` is set, the tests force the X11 backend so that no test window opens
-on a Wayland desktop, and they keep recent files and settings in a temporary
-directory.
+The GTK tests need Xvfb, and the native input regression test also needs `libXtst`. When `DISPLAY` is set, the tests force the X11 backend so that no test windows open on your Wayland desktop, and they keep recent files and settings in a temporary directory rather than touching yours.
 
-The suite checks canonical form values and widget appearances after saving,
-form scripts, dynamic XFA layout, multiple pages, text and drawing output, rotation/cropping,
-passwords, atomic saving, history, inline editing, resizing, group moves and
-deletion, text selection, links, search, annotations, highlights, view rotation
-and spreads, presentation mode, the toolbar drawer, remembered positions,
-printing, the sidebar, continuous wheel scrolling, and display/save text layout
-agreement.
+The test suite checks canonical form values and widget appearances after saving, form scripts, dynamic XFA layout, multi-page documents, text and drawing output, rotation and cropping, passwords, atomic saving, undo history, inline editing, resizing, moving and deleting groups, text selection, links, search, annotations, highlights, view rotation and spreads, presentation mode, the toolbar drawer, remembered positions, printing, the sidebar, continuous wheel scrolling and whether text is laid out the same way on screen as in the saved file.
 
-See [prior-art.md](docs/prior-art.md) for the research that informed this app.
-This project is licensed under AGPL-3.0-or-later; see [LICENSE](LICENSE).
+## Licence
+
+PDF Marker is licensed under [AGPL-3.0-or-later](LICENSE).
 
 [^xfa]: The placeholder page is often just a message saying "Please wait..." and suggesting you upgrade to the latest version of Adobe Reader. Waiting does not help.
